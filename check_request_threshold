@@ -1,0 +1,93 @@
+#! /bin/bash
+#set -x
+PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+
+PROGNAME=`basename $0`
+PROGPATH=`echo $0 | sed -e 's,[\\/][^\\/][^\\/]*$,,'`
+REVISION="0.1"
+YEAR=`date +%Y`
+MONTH=`date +%m`
+MONTH_STR=`date +%b`
+DAY=`date +%d`
+
+. $PROGPATH/utils.sh
+
+
+print_usage() {
+        echo "Usage: $PROGNAME -s <siteID> -m <check_timeframe_in_minutes_as_integer> -t <threshold_count_as_integer>" [--ignore-fault]
+}
+
+print_help() {
+        print_revision $PROGNAME $REVISION
+        echo ""
+        print_usage
+        echo ""
+        echo "This plugin checks weather a threshold of nr of generated loglines has been"
+        echo "crossed in a certain timeframe (in minutes) by a single IP by looking at the"
+        echo "application logs for a specific siteID - returns only worst offender."
+        echo ""
+        support
+        exit 0
+}
+
+while getopts ":s:m:t:" opt; do
+  case $opt in
+    s) siteid="$OPTARG"
+    ;;
+    m) minutes="$OPTARG"
+    ;;
+    t) threshold="$OPTARG"
+    ;;
+    \?) echo "Invalid option -$OPTARG" >&2
+    ;;
+  esac
+done
+
+case "$1" in
+        --help)
+                print_help
+                exit 0
+                ;;
+        -h)
+                print_help
+                exit 0
+                ;;
+        --version)
+        print_revision $PROGNAME $REVISION
+                exit 0
+                ;;        -V)
+                print_revision $PROGNAME $REVISION
+                exit 0
+                ;;
+        *)
+                if [ ! $siteid ] || [ ! $minutes ] || [ ! $threshold ]
+                then 
+                    print_help
+                    exit 1
+                fi
+
+                logfilepath="/srv/www/freistilbox/home/$siteid/logs/$YEAR/$MONTH/"
+                logfiles="$logfilepath/access.*.$YEAR.$MONTH.$DAY.log"
+                to_find_time=`date --date "-${minutes} min" +"%H:%M"`
+                
+                # date in apache 07/Dec/2016:00:00:02
+                worst_offender=`grep -h $DAY/$MONTH_STR/$YEAR:$to_find_time $logfiles | awk '{print $1}' | sort | uniq -c \
+                | sort -n | awk '{ gsub (",", "", $0); print $1, $2}' | tail -1`
+                status=$?
+                if test ${status} -ne 0; then
+                    echo "something went wrong with the grep"
+                    exit 1
+                fi
+                worst_offender_ip=${worst_offender#* }
+                worst_offender_count=${worst_offender% *}
+
+                if test "$worst_offender_count" -lt "$threshold" ; then
+                    exit 0
+                else
+                    echo "IP $worst_offender_ip crossed number of acceptable occurances of $threshold by making $worst_offender_count requests \
+in timeframe of last $minutes minutes."
+                    echo "$worst_offender_ip $worst_offender_count"
+                    exit 2
+                fi
+                ;;
+esac
