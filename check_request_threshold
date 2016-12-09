@@ -69,7 +69,7 @@ case "$1" in
                 #logfilepath="/srv/www/freistilbox/home/$siteid/logs/$YEAR/$MONTH/"
                 # actual actual path: /glfs/fbsites/c10004/s778/logs/
                 customerid=`getent passwd $siteid | cut -d: -f4`
-                logfilepath="/glfs/fbsites/$customerid/$siteid/logs/$YEAR/$MONTH/"
+                logfilepath="/glfs/fbsites/c$customerid/$siteid/logs/$YEAR/$MONTH/"
                 logfiles="$logfilepath/access.*.$YEAR.$MONTH.$DAY.log"
                 to_find_time=`date --date "-${minutes} min" +"%H:%M"`
                 
@@ -81,13 +81,14 @@ case "$1" in
                     echo "something went wrong with the grep"
                     exit 1
                 fi
-                worst_offender_ip=${worst_offender#* }
-                worst_offender_count=${worst_offender% *}
+                worst_offender_ip=`echo $worst_offender | awk '{print $2}'`
+                worst_offender_count=`echo $worst_offender | awk '{print $1}'`
 
                 if test "$worst_offender_count" -lt "$threshold" ; then
                     exit 0
                 else
-                    echo "IP $worst_offender_ip crossed number of acceptable occurances of $threshold by making $worst_offender_count requests \
+                    echo "IP $worst_offender_ip (`host $worst_offender_ip`) \
+crossed number of acceptable occurances of $threshold by making $worst_offender_count requests \
 in timeframe of last $minutes minutes."
 #                    echo "$worst_offender_ip $worst_offender_count"
                     exit 2
